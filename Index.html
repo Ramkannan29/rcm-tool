@@ -1,0 +1,1352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced RCM Project Tool (Dual-Mode)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .table-container { max-height: 70vh; overflow: auto; }
+        .loader { border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .hidden { display: none; }
+        .tab-btn { padding: 0.75rem 1.5rem; font-weight: 600; cursor: pointer; border-bottom: 4px solid transparent; transition: all 0.3s; }
+        .tab-btn.active { color: #4f46e5; border-bottom-color: #4f46e5; }
+        .rule-block { background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 0.75rem; padding: 1rem; margin-bottom: 1rem; }
+        .condition-block { display: grid; grid-template-columns: auto 1fr 1fr 1fr auto; gap: 0.5rem; align-items: center; margin-top: 0.5rem; }
+        .action-block { display: grid; grid-template-columns: auto 1fr 1fr; gap: 0.5rem; align-items: center; margin-top: 0.75rem; border-top: 1px dashed #cbd5e1; padding-top: 0.75rem; }
+        .tag { background-color: #e0e7ff; color: #4338ca; padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.875rem; font-weight: 500; }
+        .range-container { display: flex; gap: 0.5rem; }
+        .transformation-item { background-color: #f1f5f9; padding: 0.75rem 1rem; border-radius: 0.5rem; display: flex; justify-content: space-between; align-items: center; }
+        button:disabled { background-color: #9ca3af; cursor: not-allowed; }
+        .remap-select { border-color: #f59e0b; }
+        .transform-tab { background-color: #eef2ff; color: #4338ca; }
+        .transform-tab.active { background-color: #4f46e5; color: white; }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div class="container mx-auto p-4 md:p-6">
+        <header class="text-center mb-4">
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-900">Advanced RCM Project Tool</h1>
+        </header>
+
+        <!-- TABS -->
+        <div class="bg-white rounded-xl shadow-sm border mb-6">
+            <div class="flex border-b">
+                <button id="builder-tab-btn" class="tab-btn active" onclick="switchTab('builder')">1. Project & Rule Builder</button>
+                <button id="executor-tab-btn" class="tab-btn" onclick="switchTab('executor')">2. Rule Executor</button>
+            </div>
+        </div>
+
+        <!-- BUILDER SECTION -->
+        <div id="builder-section">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Left Panel: Setup -->
+                <div class="lg:col-span-1 space-y-6">
+                    <div class="bg-white p-5 rounded-xl shadow-sm border">
+                        <h2 class="text-xl font-semibold mb-4 text-gray-700">Project Setup</h2>
+                        <input type="text" id="newProjectName" placeholder="Enter New Project Name" class="w-full p-2 border rounded-md mb-2">
+                        <button id="createProjectBtn" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition mb-4">Create Project</button>
+                        <label for="builderProjectSelect" class="block font-medium mb-1">Select Project to Edit</label>
+                        <select id="builderProjectSelect" class="w-full p-2 border rounded-md bg-white"></select>
+                    </div>
+                     <div class="bg-white p-5 rounded-xl shadow-sm border">
+                        <h2 class="text-xl font-semibold mb-4 text-gray-700">Upload & Format Sample File</h2>
+                        <p class="text-sm text-gray-500 mb-2">Upload a file to begin configuration.</p>
+                        <input type="file" id="builderFileUploader" accept=".csv, .xlsx, .xls" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer">
+                        <span id="builder-file-status" class="text-sm font-medium text-gray-500 mt-2 block">No file selected.</span>
+                        <button id="formatBuilderDataBtn" class="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-4 rounded-lg transition mt-3" disabled>Format Dates & Currency</button>
+                        <span id="builder-format-status" class="text-sm font-medium text-green-600 mt-2 block h-4 text-center"></span>
+                    </div>
+                </div>
+                <!-- Right Panel: Config & Rules -->
+                <div id="builder-config-panel" class="lg:col-span-2 space-y-6 hidden">
+                    <div class="bg-white p-5 rounded-xl shadow-sm border">
+                        <h2 class="text-xl font-semibold mb-4 text-gray-700">Project Configuration</h2>
+                        <div class="mb-4">
+                            <label for="serviceDateColumn" class="block font-medium mb-1">Service Date Column (for Aging)</label>
+                            <select id="serviceDateColumn" class="w-full p-2 border rounded-md bg-white"></select>
+                        </div>
+                        <div>
+                            <label class="block font-medium mb-1">Define Custom Columns</label>
+                            <div id="custom-columns-controls">
+                                <div class="flex space-x-2">
+                                    <input type="text" id="newCustomColumn" placeholder="e.g., Category, Team" class="w-full p-2 border rounded-md">
+                                    <button id="addCustomColumnBtn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg">+</button>
+                                </div>
+                            </div>
+                            <div id="customColumnsContainer" class="mt-3 flex flex-wrap gap-2"></div>
+                        </div>
+                    </div>
+                    
+                    <div id="transformation-section" class="bg-white p-5 rounded-xl shadow-sm border">
+                        <h2 class="text-xl font-semibold mb-4 text-gray-700">Data Transformations (Optional)</h2>
+                        <div class="border p-4 rounded-lg mb-4 bg-gray-50">
+                             <div class="flex mb-4 rounded-lg overflow-hidden">
+                                <button id="vlookup-tab-btn" class="transform-tab active w-1/2 py-2 px-4 font-semibold" onclick="switchTransformTab('vlookup')">VLOOKUP</button>
+                                <button id="concat-tab-btn" class="transform-tab w-1/2 py-2 px-4 font-semibold" onclick="switchTransformTab('concat')">Concatenate</button>
+                            </div>
+                            <div id="vlookup-adder">
+                                <h3 class="font-semibold mb-2 text-gray-800">Add VLOOKUP Step</h3>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-600">1. Upload/Select Lookup File</label>
+                                        <input type="file" id="lookupFileUploader" accept=".csv, .xlsx, .xls" class="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer">
+                                        <span id="lookup-file-status" class="text-xs font-medium text-gray-500 mt-1 block"></span>
+                                    </div>
+                                    <div id="vlookup-controls" class="hidden space-y-2">
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-600">2. Configure VLOOKUP</label>
+                                            <select id="vlookup-primary-col" class="mt-1 w-full p-2 border rounded-md bg-white text-sm" title="Column from your main file to match on"></select>
+                                            <select id="vlookup-lookup-match-col" class="mt-1 w-full p-2 border rounded-md bg-white text-sm" title="Column from the lookup file to match on"></select>
+                                            <select id="vlookup-lookup-return-col" class="mt-1 w-full p-2 border rounded-md bg-white text-sm" title="Column from the lookup file to get the value from"></select>
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-600 mt-2">3. VLOOKUP Target</label>
+                                            <div class="mt-1 space-y-1 text-sm">
+                                                <div>
+                                                    <input type="radio" id="vlookup-target-new" name="vlookup-target" value="new" checked class="mr-1">
+                                                    <label for="vlookup-target-new">Create New Column</label>
+                                                </div>
+                                                <div id="vlookup-new-col-container">
+                                                    <input type="text" id="vlookup-new-col-name" placeholder="New Column Name" class="w-full p-2 border rounded-md text-sm">
+                                                </div>
+                                                <div>
+                                                    <input type="radio" id="vlookup-target-existing" name="vlookup-target" value="existing" class="mr-1">
+                                                    <label for="vlookup-target-existing">Update Existing Custom Column</label>
+                                                </div>
+                                                <div id="vlookup-existing-col-container" class="hidden">
+                                                    <select id="vlookup-existing-col-select" class="w-full p-2 border rounded-md bg-white text-sm"></select>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <button id="addVlookupBtn" class="w-full bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg transition text-sm mt-2">Add VLOOKUP Step</button>
+                                    </div>
+                                </div>
+                            </div>
+                             <div id="concat-adder" class="hidden">
+                                <h3 class="font-semibold mb-2 text-gray-800">Add Concatenate Step</h3>
+                                <div class="space-y-3">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-600">1. Select Columns to Combine (2 or more)</label>
+                                        <select id="concat-columns" multiple class="w-full p-2 border rounded-md bg-white text-sm h-24"></select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-600">2. Separator (optional)</label>
+                                        <input type="text" id="concat-separator" placeholder="e.g., - or _" class="w-full p-2 border rounded-md text-sm">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-600">3. Concatenate Target</label>
+                                        <div class="mt-1 space-y-1 text-sm">
+                                            <div>
+                                                <input type="radio" id="concat-target-new" name="concat-target" value="new" checked class="mr-1">
+                                                <label for="concat-target-new">Create New Column</label>
+                                            </div>
+                                            <div id="concat-new-col-container">
+                                                <input type="text" id="concat-new-col-name" placeholder="New Column Name" class="w-full p-2 border rounded-md text-sm">
+                                            </div>
+                                            <div>
+                                                <input type="radio" id="concat-target-existing" name="concat-target" value="existing" class="mr-1">
+                                                <label for="concat-target-existing">Update Existing Custom Column</label>
+                                            </div>
+                                            <div id="concat-existing-col-container" class="hidden">
+                                                <select id="concat-existing-col-select" class="w-full p-2 border rounded-md bg-white text-sm"></select>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <button id="addConcatBtn" class="w-full bg-teal-500 hover:bg-teal-600 text-white font-bold py-2 px-4 rounded-lg transition text-sm mt-2">Add Concatenate Step</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="transformations-list" class="space-y-2"></div>
+                    </div>
+
+                    <button id="prepareDataBtn" class="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-3 px-4 rounded-lg transition text-lg">Apply Transformations & Prepare for Rules</button>
+
+                    <div id="rule-building-section" class="space-y-6 hidden">
+                        <div class="bg-white p-5 rounded-xl shadow-sm border">
+                            <h2 class="text-xl font-semibold mb-4 text-gray-700">Rule Builder</h2>
+                            <div id="rules-container" class="space-y-4"></div>
+                            <button id="add-rule-btn" class="mt-4 bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg">+ Add New Rule</button>
+                        </div>
+                        <div class="bg-white p-5 rounded-xl shadow-sm border text-center">
+                            <button id="saveProjectBtn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-8 rounded-lg text-lg transition">Save Project Settings</button>
+                            <p id="save-feedback" class="text-green-600 font-semibold mt-2 h-6"></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- EXECUTOR SECTION -->
+        <div id="executor-section" class="hidden">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="lg:col-span-1 space-y-6">
+                    <div class="bg-white p-5 rounded-xl shadow-sm border">
+                        <h2 class="text-xl font-semibold mb-4 text-gray-700">1. Select Project</h2>
+                        <select id="executorProjectSelect" class="w-full p-2 border rounded-md bg-white mb-2"></select>
+                    </div>
+                    <div class="bg-white p-5 rounded-xl shadow-sm border">
+                        <h2 class="text-xl font-semibold mb-4 text-gray-700">2. Upload & Format Data File</h2>
+                        <input type="file" id="executorFileUploader" accept=".csv, .xlsx, .xls" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer">
+                        <span id="executor-file-status" class="text-sm font-medium text-gray-500 mt-2 block">No file selected.</span>
+                        <button id="formatExecutorDataBtn" class="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-4 rounded-lg transition mt-3" disabled>Format Dates & Currency</button>
+                        <span id="executor-format-status" class="text-sm font-medium text-green-600 mt-2 block h-4 text-center"></span>
+                    </div>
+                    <div id="executor-transformation-section" class="bg-white p-5 rounded-xl shadow-sm border hidden">
+                        <h2 class="text-xl font-semibold mb-4 text-gray-700">3. Transformation Setup</h2>
+                        <div id="executor-transformations-list" class="space-y-4 mb-4"></div>
+                        <button id="runExecutorTransformsBtn" class="w-full bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg transition" disabled>Apply Transformations</button>
+                        <p id="executor-transform-status" class="text-sm text-center mt-2 h-4"></p>
+                    </div>
+                    <div id="executor-processing-section" class="bg-white p-5 rounded-xl shadow-sm border hidden">
+                        <h2 class="text-xl font-semibold mb-4 text-gray-700">4. Execute Rules</h2>
+                        <div class="space-y-4">
+                            <button id="run-aging-btn" class="w-full bg-teal-500 hover:bg-teal-600 text-white font-bold py-3 px-6 rounded-lg text-lg transition" disabled>Run Aging Only</button>
+                            <button id="run-full-btn" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-lg text-lg transition" disabled>Run Full Project</button>
+                        </div>
+                        <div id="loader" class="hidden mx-auto mt-4"></div>
+                    </div>
+                </div>
+                <div class="lg:col-span-2">
+                     <div id="results-container" class="bg-white p-5 rounded-xl shadow-sm border hidden">
+                        <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-2xl font-semibold text-gray-800">Results</h2>
+                            <button id="download-csv" class="bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-2 px-4 rounded-lg transition">Download Formatted CSV</button>
+                        </div>
+                        <div id="table-container" class="table-container border border-gray-200 rounded-lg"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script>
+// --- STATE MANAGEMENT ---
+let appState = {
+    projects: {},
+    activeProjectName: null,
+    projectIsDirty: false,
+    builderHeaders: [],
+    builderData: [],
+    builderDataIsPrepared: false,
+    currentLookup: { data: [], headers: [], fileName: '' },
+    transformations: [],
+    executorData: [],
+    executorHeaders: [],
+    sessionExecutorTransforms: [],
+    processedData: []
+};
+
+// --- DOM ELEMENTS ---
+const el = {
+    builderTab: document.getElementById('builder-section'),
+    executorTab: document.getElementById('executor-section'),
+    builderTabBtn: document.getElementById('builder-tab-btn'),
+    executorTabBtn: document.getElementById('executor-tab-btn'),
+    newProjectName: document.getElementById('newProjectName'),
+    createProjectBtn: document.getElementById('createProjectBtn'),
+    builderProjectSelect: document.getElementById('builderProjectSelect'),
+    builderFileUploader: document.getElementById('builderFileUploader'),
+    builderFileStatus: document.getElementById('builder-file-status'),
+    formatBuilderDataBtn: document.getElementById('formatBuilderDataBtn'),
+    builderFormatStatus: document.getElementById('builder-format-status'),
+    builderConfigPanel: document.getElementById('builder-config-panel'),
+    serviceDateColumn: document.getElementById('serviceDateColumn'),
+    newCustomColumn: document.getElementById('newCustomColumn'),
+    addCustomColumnBtn: document.getElementById('addCustomColumnBtn'),
+    customColumnsContainer: document.getElementById('customColumnsContainer'),
+    customColumnsControls: document.getElementById('custom-columns-controls'),
+    transformationSection: document.getElementById('transformation-section'),
+    vlookupAdder: document.getElementById('vlookup-adder'),
+    concatAdder: document.getElementById('concat-adder'),
+    vlookupTabBtn: document.getElementById('vlookup-tab-btn'),
+    concatTabBtn: document.getElementById('concat-tab-btn'),
+    lookupFileUploader: document.getElementById('lookupFileUploader'),
+    lookupFileStatus: document.getElementById('lookup-file-status'),
+    vlookupControls: document.getElementById('vlookup-controls'),
+    vlookupPrimaryCol: document.getElementById('vlookup-primary-col'),
+    vlookupLookupMatchCol: document.getElementById('vlookup-lookup-match-col'),
+    vlookupLookupReturnCol: document.getElementById('vlookup-lookup-return-col'),
+    vlookupNewColContainer: document.getElementById('vlookup-new-col-container'),
+    vlookupNewColName: document.getElementById('vlookup-new-col-name'),
+    vlookupExistingColContainer: document.getElementById('vlookup-existing-col-container'),
+    vlookupExistingColSelect: document.getElementById('vlookup-existing-col-select'),
+    addVlookupBtn: document.getElementById('addVlookupBtn'),
+    concatColumns: document.getElementById('concat-columns'),
+    concatSeparator: document.getElementById('concat-separator'),
+    concatNewColContainer: document.getElementById('concat-new-col-container'),
+    concatNewColName: document.getElementById('concat-new-col-name'),
+    concatExistingColContainer: document.getElementById('concat-existing-col-container'),
+    concatExistingColSelect: document.getElementById('concat-existing-col-select'),
+    addConcatBtn: document.getElementById('addConcatBtn'),
+    transformationsList: document.getElementById('transformations-list'),
+    prepareDataBtn: document.getElementById('prepareDataBtn'),
+    ruleBuildingSection: document.getElementById('rule-building-section'),
+    rulesContainer: document.getElementById('rules-container'),
+    addRuleBtn: document.getElementById('add-rule-btn'),
+    saveProjectBtn: document.getElementById('saveProjectBtn'),
+    saveFeedback: document.getElementById('save-feedback'),
+    executorProjectSelect: document.getElementById('executorProjectSelect'),
+    executorFileUploader: document.getElementById('executorFileUploader'),
+    executorFileStatus: document.getElementById('executor-file-status'),
+    formatExecutorDataBtn: document.getElementById('formatExecutorDataBtn'),
+    executorFormatStatus: document.getElementById('executor-format-status'),
+    executorTransformationSection: document.getElementById('executor-transformation-section'),
+    executorTransformationsList: document.getElementById('executor-transformations-list'),
+    runExecutorTransformsBtn: document.getElementById('runExecutorTransformsBtn'),
+    executorTransformStatus: document.getElementById('executor-transform-status'),
+    executorProcessingSection: document.getElementById('executor-processing-section'),
+    runAgingBtn: document.getElementById('run-aging-btn'),
+    runFullBtn: document.getElementById('run-full-btn'),
+    loader: document.getElementById('loader'),
+    resultsContainer: document.getElementById('results-container'),
+    tableContainer: document.getElementById('table-container'),
+    downloadCsv: document.getElementById('download-csv')
+};
+
+// --- INITIALIZATION ---
+document.addEventListener('DOMContentLoaded', initialize);
+
+function initialize() {
+    loadProjectsFromStorage();
+    updateProjectDropdowns();
+    setupEventListeners();
+}
+
+function setupEventListeners() {
+    el.createProjectBtn.addEventListener('click', createNewProject);
+    el.builderProjectSelect.addEventListener('change', selectProjectToEdit);
+    el.builderFileUploader.addEventListener('change', (e) => handleFileSelect(e, 'builder'));
+    el.formatBuilderDataBtn.addEventListener('click', formatBuilderData);
+    el.lookupFileUploader.addEventListener('change', (e) => handleFileSelect(e, 'lookup'));
+    el.addVlookupBtn.addEventListener('click', addVlookupTransformation);
+    el.addConcatBtn.addEventListener('click', addConcatTransformation);
+    el.prepareDataBtn.addEventListener('click', prepareBuilderData);
+    el.addCustomColumnBtn.addEventListener('click', addCustomColumn);
+    el.addRuleBtn.addEventListener('click', () => addRule());
+    el.saveProjectBtn.addEventListener('click', saveCurrentProject);
+    
+    el.serviceDateColumn.addEventListener('change', () => {
+        if (appState.activeProjectName) {
+            appState.projects[appState.activeProjectName].serviceDateColumn = el.serviceDateColumn.value;
+            markProjectAsDirty();
+        }
+    });
+
+    document.querySelectorAll('input[name="vlookup-target"]').forEach(radio => {
+        radio.addEventListener('change', (e) => {
+            const isNew = e.target.value === 'new';
+            el.vlookupNewColContainer.classList.toggle('hidden', !isNew);
+            el.vlookupExistingColContainer.classList.toggle('hidden', isNew);
+        });
+    });
+    
+    document.querySelectorAll('input[name="concat-target"]').forEach(radio => {
+        radio.addEventListener('change', (e) => {
+            const isNew = e.target.value === 'new';
+            el.concatNewColContainer.classList.toggle('hidden', !isNew);
+            el.concatExistingColContainer.classList.toggle('hidden', isNew);
+        });
+    });
+
+    // Executor Listeners
+    el.executorProjectSelect.addEventListener('change', selectProjectToExecute);
+    el.executorFileUploader.addEventListener('change', (e) => handleFileSelect(e, 'executor'));
+    el.formatExecutorDataBtn.addEventListener('click', formatExecutorData);
+    el.runExecutorTransformsBtn.addEventListener('click', runExecutorTransformations);
+    el.runAgingBtn.addEventListener('click', () => processData(false));
+    el.runFullBtn.addEventListener('click', () => processData(true));
+    el.downloadCsv.addEventListener('click', downloadCSV);
+}
+
+// --- DIRTY STATE MANAGEMENT ---
+function markProjectAsDirty() {
+    if (appState.projectIsDirty) return;
+    appState.projectIsDirty = true;
+    el.saveProjectBtn.textContent = 'Save Project Settings*';
+    el.saveProjectBtn.classList.remove('bg-indigo-600', 'hover:bg-indigo-700');
+    el.saveProjectBtn.classList.add('bg-yellow-500', 'hover:bg-yellow-600', 'text-black');
+}
+
+function markProjectAsClean(showFeedback = false) {
+    appState.projectIsDirty = false;
+    el.saveProjectBtn.textContent = 'Save Project Settings';
+    el.saveProjectBtn.classList.add('bg-indigo-600', 'hover:bg-indigo-700');
+    el.saveProjectBtn.classList.remove('bg-yellow-500', 'hover:bg-yellow-600', 'text-black');
+    if (showFeedback) {
+        el.saveFeedback.textContent = `Project "${appState.activeProjectName}" saved successfully!`;
+        setTimeout(() => { el.saveFeedback.textContent = ''; }, 3000);
+    }
+}
+
+// --- TAB & UI MANAGEMENT ---
+function switchTab(tabName) {
+    if (tabName === 'builder') {
+        el.builderTab.classList.remove('hidden');
+        el.executorTab.classList.add('hidden');
+        el.builderTabBtn.classList.add('active');
+        el.executorTabBtn.classList.remove('active');
+    } else {
+        el.builderTab.classList.add('hidden');
+        el.executorTab.classList.remove('hidden');
+        el.builderTabBtn.classList.remove('active');
+        el.executorTabBtn.classList.add('active');
+    }
+}
+
+function switchTransformTab(tabName) {
+    if (tabName === 'vlookup') {
+        el.vlookupAdder.classList.remove('hidden');
+        el.concatAdder.classList.add('hidden');
+        el.vlookupTabBtn.classList.add('active');
+        el.concatTabBtn.classList.remove('active');
+    } else {
+        el.vlookupAdder.classList.add('hidden');
+        el.concatAdder.classList.remove('hidden');
+        el.vlookupTabBtn.classList.remove('active');
+        el.concatTabBtn.classList.add('active');
+    }
+}
+
+
+function updateProjectDropdowns() {
+    const projectNames = Object.keys(appState.projects);
+    const optionsHtml = ['<option value="">-- Select a Project --</option>', ...projectNames.map(name => `<option value="${name}">${name}</option>`)].join('');
+    el.builderProjectSelect.innerHTML = optionsHtml;
+    el.executorProjectSelect.innerHTML = optionsHtml;
+    if (appState.activeProjectName) {
+        el.builderProjectSelect.value = appState.activeProjectName;
+    }
+}
+
+function updateBuilderUI() {
+    const project = appState.activeProjectName ? appState.projects[appState.activeProjectName] : null;
+    if (appState.builderHeaders.length === 0) {
+        el.builderConfigPanel.classList.add('hidden');
+        return;
+    }
+    el.builderConfigPanel.classList.remove('hidden');
+    const dateColumns = appState.builderHeaders.filter(h => h.toLowerCase().includes('date') || h.toLowerCase().includes('dos'));
+    el.serviceDateColumn.innerHTML = appState.builderHeaders.map(h => `<option value="${h}">${h}</option>`).join('');
+    
+    if (project) {
+        el.serviceDateColumn.value = project.serviceDateColumn || (dateColumns.length > 0 ? dateColumns[0] : '');
+        
+        el.customColumnsControls.classList.remove('hidden');
+        el.customColumnsContainer.innerHTML = project.customColumns.map((col, index) => `
+            <span class="tag flex items-center">
+                ${col}<button onclick="removeCustomColumn(${index})" class="ml-2 text-red-500 hover:text-red-700">&times;</button>
+            </span>`).join('');
+        el.rulesContainer.innerHTML = '';
+        if (project.rules && project.rules.length > 0) {
+            project.rules.forEach((rule, index) => addRule(rule, index));
+        }
+        el.addRuleBtn.disabled = false;
+        el.saveProjectBtn.disabled = false;
+    } else {
+        el.customColumnsControls.classList.add('hidden');
+        el.customColumnsContainer.innerHTML = '<p class="text-sm text-gray-500">Create or select a project to add custom columns.</p>';
+        el.rulesContainer.innerHTML = '';
+        el.addRuleBtn.disabled = true;
+        el.saveProjectBtn.disabled = true;
+    }
+
+    const isPrepared = appState.builderDataIsPrepared;
+    el.ruleBuildingSection.classList.toggle('hidden', !isPrepared);
+    el.prepareDataBtn.classList.toggle('hidden', isPrepared);
+
+    renderTransformationsList();
+    updateVlookupControls();
+    updateConcatControls();
+}
+
+// --- PROJECT MANAGEMENT ---
+function loadProjectsFromStorage() {
+    const stored = localStorage.getItem('rcmProjects');
+    if (stored) {
+        appState.projects = JSON.parse(stored);
+    }
+}
+
+function saveProjectsToStorage() {
+    localStorage.setItem('rcmProjects', JSON.stringify(appState.projects));
+}
+
+function createNewProject() {
+    const name = el.newProjectName.value.trim();
+    if (name && !appState.projects[name]) {
+        appState.projects[name] = { serviceDateColumn: '', customColumns: [], rules: [], transformations: [] };
+        appState.activeProjectName = name;
+        el.newProjectName.value = '';
+        updateProjectDropdowns();
+        el.builderProjectSelect.value = name;
+        markProjectAsDirty();
+        updateBuilderUI();
+    } else if (appState.projects[name]) {
+        alert("A project with this name already exists.");
+    }
+}
+
+function selectProjectToEdit() {
+    const selectedName = el.builderProjectSelect.value;
+    appState.activeProjectName = selectedName ? selectedName : null;
+    const project = appState.projects[selectedName];
+    if (project) {
+        appState.transformations = project.transformations ? JSON.parse(JSON.stringify(project.transformations)) : [];
+    } else {
+        appState.transformations = [];
+    }
+    markProjectAsClean(false);
+    updateBuilderUI();
+}
+
+function saveCurrentProject() {
+    if (!appState.activeProjectName) return;
+    const project = appState.projects[appState.activeProjectName];
+    project.serviceDateColumn = el.serviceDateColumn.value;
+    
+    const transformationsToSave = JSON.parse(JSON.stringify(appState.transformations));
+    transformationsToSave.forEach(t => {
+        if (t._builderLookupData) delete t._builderLookupData;
+    });
+    project.transformations = transformationsToSave;
+
+    saveProjectsToStorage();
+    markProjectAsClean(true);
+}
+
+// --- FILE HANDLING ---
+function handleFileSelect(event, mode, index) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    let statusEl;
+    switch(mode) {
+        case 'builder': statusEl = el.builderFileStatus; break;
+        case 'lookup': statusEl = el.lookupFileStatus; break;
+        case 'executor': statusEl = el.executorFileStatus; break;
+        case 'executorLookup': statusEl = document.getElementById(`executor-lookup-status-${index}`); break;
+        default: return;
+    }
+
+    statusEl.textContent = `Loading: ${file.name}...`;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        try {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, { type: 'array' });
+            const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+            const jsonData = XLSX.utils.sheet_to_json(worksheet);
+            if (jsonData.length === 0) throw new Error("File is empty.");
+            const headers = Object.keys(jsonData[0] || {});
+            
+            if (mode === 'builder') {
+                appState.builderData = jsonData;
+                appState.builderHeaders = headers;
+                appState.builderDataIsPrepared = false;
+                appState.transformations = []; // Clear transformations for new file
+                el.formatBuilderDataBtn.disabled = false;
+                el.builderFormatStatus.textContent = '';
+                statusEl.textContent = `Loaded: ${file.name} (${jsonData.length} rows)`;
+                updateBuilderUI();
+            } else if (mode === 'lookup') {
+                appState.currentLookup = { data: jsonData, headers: headers, fileName: file.name };
+                statusEl.textContent = `Using: ${file.name} (${jsonData.length} rows)`;
+                updateVlookupControls();
+            } else if (mode === 'executor') {
+                appState.executorData = jsonData;
+                appState.executorHeaders = headers;
+                el.formatExecutorDataBtn.disabled = false;
+                el.executorFormatStatus.textContent = '';
+                statusEl.textContent = `Loaded: ${file.name} (${jsonData.length} rows)`;
+            } else if (mode === 'executorLookup') {
+                appState.sessionExecutorTransforms[index].lookupData = jsonData;
+                appState.sessionExecutorTransforms[index].lookupHeaders = headers;
+                statusEl.textContent = `Loaded: ${file.name} (${jsonData.length} rows)`;
+                renderExecutorTransformations();
+            }
+        } catch (err) {
+            statusEl.textContent = `Error: ${err.message}`;
+            console.error(err);
+        }
+    };
+    reader.readAsArrayBuffer(file);
+}
+
+// --- BUILDER: TRANSFORMATION LOGIC ---
+function updateVlookupControls() {
+    const project = appState.activeProjectName ? appState.projects[appState.activeProjectName] : null;
+    if (appState.builderHeaders.length > 0 && appState.currentLookup.headers.length > 0) {
+        el.vlookupControls.classList.remove('hidden');
+        el.vlookupPrimaryCol.innerHTML = appState.builderHeaders.map(h => `<option value="${h}">Main: ${h}</option>`).join('');
+        el.vlookupLookupMatchCol.innerHTML = appState.currentLookup.headers.map(h => `<option value="${h}">Lookup: ${h}</option>`).join('');
+        el.vlookupLookupReturnCol.innerHTML = appState.currentLookup.headers.map(h => `<option value="${h}">Return: ${h}</option>`).join('');
+        
+        if (project && project.customColumns.length > 0) {
+            el.vlookupExistingColSelect.innerHTML = project.customColumns.map(c => `<option value="${c}">${c}</option>`).join('');
+            document.querySelector('label[for="vlookup-target-existing"]').parentElement.classList.remove('hidden');
+        } else {
+            el.vlookupExistingColSelect.innerHTML = '';
+            document.querySelector('label[for="vlookup-target-existing"]').parentElement.classList.add('hidden');
+            document.getElementById('vlookup-target-new').checked = true;
+            el.vlookupNewColContainer.classList.remove('hidden');
+            el.vlookupExistingColContainer.classList.add('hidden');
+        }
+
+    } else {
+        el.vlookupControls.classList.add('hidden');
+    }
+}
+
+function updateConcatControls() {
+    const project = appState.activeProjectName ? appState.projects[appState.activeProjectName] : null;
+    if (appState.builderHeaders.length > 0) {
+        el.concatColumns.innerHTML = appState.builderHeaders.map(h => `<option value="${h}">${h}</option>`).join('');
+        if (project && project.customColumns.length > 0) {
+            el.concatExistingColSelect.innerHTML = project.customColumns.map(c => `<option value="${c}">${c}</option>`).join('');
+            document.querySelector('label[for="concat-target-existing"]').parentElement.classList.remove('hidden');
+        } else {
+            el.concatExistingColSelect.innerHTML = '';
+            document.querySelector('label[for="concat-target-existing"]').parentElement.classList.add('hidden');
+            document.getElementById('concat-target-new').checked = true;
+            el.concatNewColContainer.classList.remove('hidden');
+            el.concatExistingColContainer.classList.add('hidden');
+        }
+    }
+}
+
+function addVlookupTransformation() {
+    const targetType = document.querySelector('input[name="vlookup-target"]:checked').value;
+    let targetColumn;
+
+    if (targetType === 'new') {
+        targetColumn = el.vlookupNewColName.value.trim();
+        if (!targetColumn) { alert("Please provide a name for the new column."); return; }
+        const allCols = [...appState.builderHeaders, ...appState.transformations.map(t => t.params.targetColumn)];
+        if (allCols.includes(targetColumn)) {
+            alert("This column name already exists or is planned. Please choose a unique name."); return;
+        }
+    } else {
+        targetColumn = el.vlookupExistingColSelect.value;
+        if (!targetColumn) { alert("Please select an existing column to update."); return; }
+    }
+    
+    if (appState.currentLookup.data.length === 0) {
+        alert("Please upload a lookup file first."); return;
+    }
+
+    const transformation = {
+        type: 'vlookup',
+        id: Date.now(),
+        params: {
+            primaryCol: el.vlookupPrimaryCol.value,
+            matchCol: el.vlookupLookupMatchCol.value,
+            returnCol: el.vlookupLookupReturnCol.value,
+            targetType: targetType,
+            targetColumn: targetColumn,
+            lookupIdentifier: appState.currentLookup.fileName || 'Lookup File'
+        },
+        _builderLookupData: appState.currentLookup.data
+    };
+    appState.transformations.push(transformation);
+    
+    el.vlookupNewColName.value = '';
+    el.vlookupExistingColSelect.selectedIndex = 0;
+    
+    if (appState.builderDataIsPrepared) {
+        appState.builderDataIsPrepared = false;
+        updateBuilderUI();
+    } else {
+        renderTransformationsList();
+    }
+    markProjectAsDirty();
+}
+
+function addConcatTransformation() {
+    const targetType = document.querySelector('input[name="concat-target"]:checked').value;
+    let targetColumn;
+    const selectedColumns = Array.from(el.concatColumns.selectedOptions).map(opt => opt.value);
+
+    if (selectedColumns.length < 2) {
+        alert("Please select at least two columns to concatenate.");
+        return;
+    }
+
+    if (targetType === 'new') {
+        targetColumn = el.concatNewColName.value.trim();
+        if (!targetColumn) { alert("Please provide a name for the new column."); return; }
+        const allCols = [...appState.builderHeaders, ...appState.transformations.map(t => t.params.targetColumn)];
+        if (allCols.includes(targetColumn)) {
+            alert("This column name already exists or is planned. Please choose a unique name."); return;
+        }
+    } else {
+        targetColumn = el.concatExistingColSelect.value;
+        if (!targetColumn) { alert("Please select an existing column to update."); return; }
+    }
+
+    const transformation = {
+        type: 'concatenate',
+        id: Date.now(),
+        params: {
+            columns: selectedColumns,
+            separator: el.concatSeparator.value,
+            targetType: targetType,
+            targetColumn: targetColumn
+        }
+    };
+    appState.transformations.push(transformation);
+
+    el.concatNewColName.value = '';
+    el.concatSeparator.value = '';
+    el.concatExistingColSelect.selectedIndex = 0;
+    el.concatColumns.selectedIndex = -1;
+
+    if (appState.builderDataIsPrepared) {
+        appState.builderDataIsPrepared = false;
+        updateBuilderUI();
+    } else {
+        renderTransformationsList();
+    }
+    markProjectAsDirty();
+}
+
+
+function renderTransformationsList() {
+    el.transformationsList.innerHTML = appState.transformations.map((t, index) => {
+        let description = '';
+        if (t.type === 'vlookup') {
+            const p = t.params;
+            const targetText = p.targetType === 'new'
+                ? `Create column '<b>${p.targetColumn}</b>'`
+                : `Update column '<b>${p.targetColumn}</b>'`;
+            description = `<span class="font-semibold text-sm">VLOOKUP:</span> <span class="text-sm"> ${targetText} using <i>${p.lookupIdentifier}</i></span>`;
+        } else if (t.type === 'concatenate') {
+            const p = t.params;
+            const targetText = p.targetType === 'new'
+                ? `Create column '<b>${p.targetColumn}</b>'`
+                : `Update column '<b>${p.targetColumn}</b>'`;
+            description = `<span class="font-semibold text-sm">CONCAT:</span> <span class="text-sm"> ${targetText} by joining <i>${p.columns.join(', ')}</i></span>`;
+        }
+
+        return `
+        <div class="transformation-item">
+            <div>${description}</div>
+            <div class="flex items-center">
+                <button onclick="moveTransformation(${index}, 'up')" class="px-2 ${index === 0 ? 'opacity-25 cursor-not-allowed' : ''}" ${index === 0 ? 'disabled' : ''}>&#9650;</button>
+                <button onclick="moveTransformation(${index}, 'down')" class="px-2 ${index === appState.transformations.length - 1 ? 'opacity-25 cursor-not-allowed' : ''}" ${index === appState.transformations.length - 1 ? 'disabled' : ''}>&#9660;</button>
+                <button onclick="removeTransformation(${index})" class="text-red-500 hover:text-red-700 font-bold ml-2">&times;</button>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+window.moveTransformation = (index, direction) => {
+    if (direction === 'up' && index > 0) {
+        [appState.transformations[index], appState.transformations[index - 1]] = [appState.transformations[index - 1], appState.transformations[index]];
+    } else if (direction === 'down' && index < appState.transformations.length - 1) {
+        [appState.transformations[index], appState.transformations[index + 1]] = [appState.transformations[index + 1], appState.transformations[index]];
+    }
+    
+    if (appState.builderDataIsPrepared) {
+        appState.builderDataIsPrepared = false;
+        updateBuilderUI();
+    } else {
+        renderTransformationsList();
+    }
+    markProjectAsDirty();
+};
+
+
+window.removeTransformation = (index) => {
+    appState.transformations.splice(index, 1);
+    if (appState.builderDataIsPrepared) {
+        appState.builderDataIsPrepared = false;
+        updateBuilderUI();
+    } else {
+        renderTransformationsList();
+    }
+    markProjectAsDirty();
+}
+
+function executeBuilderTransformations(data) {
+    let transformedData = JSON.parse(JSON.stringify(data));
+    appState.transformations.forEach(t => {
+        if (t.type === 'vlookup' && t._builderLookupData) {
+            const params = t.params;
+            const lookupMap = new Map(t._builderLookupData.map(row => [String(row[params.matchCol]), row[params.returnCol]]));
+            transformedData = transformedData.map(row => {
+                const lookupValue = String(row[params.primaryCol]);
+                const foundValue = lookupMap.get(lookupValue);
+                row[params.targetColumn] = foundValue !== undefined ? foundValue : (row[params.targetColumn] || '');
+                return row;
+            });
+        } else if (t.type === 'concatenate') {
+            const params = t.params;
+            transformedData = transformedData.map(row => {
+                const valuesToJoin = params.columns.map(col => row[col] || '');
+                row[params.targetColumn] = valuesToJoin.join(params.separator);
+                return row;
+            });
+        }
+    });
+    return transformedData;
+}
+
+// --- DATA PREPARATION & PROCESSING (BUILDER) ---
+function excelSerialToDate(serial) {
+    if (isNaN(serial) || serial <= 0) return null;
+    const utc_days  = Math.floor(serial - 25569);
+    const utc_value = utc_days * 86400;                                        
+    const date_info = new Date(utc_value * 1000);
+    const offset = date_info.getTimezoneOffset();
+    date_info.setMinutes(date_info.getMinutes() + offset);
+    return date_info;
+}
+
+function runInitialAutomation(data) {
+    const keywords = { date: ['date', 'dos'], currency: ['amount', 'value', 'balance', 'charge', 'payment', 'adj'] };
+    let processed = JSON.parse(JSON.stringify(data));
+    if (processed.length === 0) return [];
+    const headers = Object.keys(processed[0]);
+    processed.forEach(row => {
+        headers.forEach(header => {
+            const lowerHeader = header.toLowerCase();
+            const cellValue = row[header];
+            if (keywords.date.some(k => lowerHeader.includes(k))) {
+                let d = null;
+                if (typeof cellValue === 'number' && cellValue > 1) {
+                    d = excelSerialToDate(cellValue);
+                } else if (typeof cellValue === 'string') {
+                    const parsedDate = new Date(cellValue);
+                    if (!isNaN(parsedDate)) d = parsedDate;
+                }
+                if (d) {
+                    const year = d.getFullYear();
+                    const month = String(d.getMonth() + 1).padStart(2, '0');
+                    const day = String(d.getDate()).padStart(2, '0');
+                    row[header] = `${year}-${month}-${day}`;
+                }
+            }
+            if (keywords.currency.some(k => lowerHeader.includes(k))) {
+                 if (typeof cellValue !== 'number') {
+                    const val = parseFloat(String(cellValue).replace(/[^0-9.-]+/g,""));
+                    if (!isNaN(val)) row[header] = val;
+                 }
+            }
+        });
+    });
+    return processed;
+}
+
+function formatBuilderData() {
+    if (appState.builderData.length === 0) return;
+    el.formatBuilderDataBtn.disabled = true;
+    el.builderFormatStatus.textContent = 'Formatting...';
+    setTimeout(() => {
+        appState.builderData = runInitialAutomation(appState.builderData);
+        appState.builderHeaders = Object.keys(appState.builderData[0] || {});
+        el.builderFormatStatus.textContent = 'Formatting Complete!';
+        updateBuilderUI();
+    }, 50);
+}
+
+function prepareBuilderData() {
+    if (appState.builderData.length === 0) return;
+    let preparedData = executeBuilderTransformations(appState.builderData);
+    const dosCol = el.serviceDateColumn.value;
+    if (!dosCol) { alert("Please select a Service Date Column."); return; }
+    preparedData = preparedData.map(row => {
+        let ageDays = 'N/A', agingBucket = 'N/A';
+        if (row[dosCol]) {
+            const serviceDate = new Date(row[dosCol]);
+            if (!isNaN(serviceDate)) {
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const serviceDateUTC = new Date(serviceDate.getTime() + serviceDate.getTimezoneOffset() * 60000);
+                serviceDateUTC.setHours(0, 0, 0, 0);
+                const diffTime = today.getTime() - serviceDateUTC.getTime();
+                const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+                ageDays = diffDays;
+                if (ageDays <= 30) agingBucket = '0-30';
+                else if (ageDays <= 60) agingBucket = '31-60';
+                else if (ageDays <= 90) agingBucket = '61-90';
+                else if (ageDays <= 120) agingBucket = '91-120';
+                else if (ageDays <= 365) agingBucket = '121-365';
+                else agingBucket = '365+';
+            }
+        }
+        return { ...row, 'AR Days': ageDays, 'AR Aging': agingBucket };
+    });
+    appState.builderData = preparedData;
+    appState.builderHeaders = Object.keys(appState.builderData[0] || {});
+    appState.builderDataIsPrepared = true;
+    el.builderFileStatus.textContent = "Data prepared. You can now build rules.";
+    updateBuilderUI();
+}
+
+// --- RULE & COLUMN BUILDER LOGIC ---
+function addCustomColumn() {
+    if (!appState.activeProjectName) return;
+    const project = appState.projects[appState.activeProjectName];
+    const colName = el.newCustomColumn.value.trim();
+    if (colName && !project.customColumns.includes(colName)) {
+        project.customColumns.push(colName);
+        el.newCustomColumn.value = '';
+        markProjectAsDirty();
+        updateBuilderUI();
+    }
+}
+
+window.removeCustomColumn = (index) => {
+    if (!appState.activeProjectName) return;
+    appState.projects[appState.activeProjectName].customColumns.splice(index, 1);
+    markProjectAsDirty();
+    updateBuilderUI();
+};
+
+window.updateCondition = (rIdx, cIdx, key, value) => {
+    markProjectAsDirty();
+    const project = appState.projects[appState.activeProjectName];
+    if (!project) return;
+    const condition = project.rules[rIdx].conditions[cIdx];
+    condition[key] = value;
+    if (key === 'operator' || key === 'column') {
+        if (key === 'operator') {
+            if (value === 'in_list') condition.value = [];
+            else if (value.startsWith('between')) condition.value = ['', ''];
+            else if (Array.isArray(condition.value)) condition.value = '';
+        }
+        renderConditions(rIdx);
+    }
+};
+
+function addRule(ruleData, ruleIndex) {
+    if (!appState.activeProjectName) return;
+    const project = appState.projects[appState.activeProjectName];
+    if (ruleIndex === undefined) {
+        markProjectAsDirty();
+        ruleData = { conditions: [{ column: appState.builderHeaders[0], operator: 'contains', value: '' }], action: { setColumn: project.customColumns[0] || '', setValue: '' } };
+        if (!project.rules) project.rules = [];
+        project.rules.push(ruleData);
+        ruleIndex = project.rules.length - 1;
+    }
+    const ruleBlock = document.createElement('div');
+    ruleBlock.className = 'rule-block';
+    ruleBlock.id = `rule-${ruleIndex}`;
+    const customColOptions = [...new Set(project.customColumns)].map(h => `<option value="${h}" ${ruleData.action.setColumn === h ? 'selected' : ''}>${h}</option>`).join('');
+    ruleBlock.innerHTML = `
+        <div class="flex justify-between items-center">
+            <h3 class="font-semibold text-lg">Rule ${ruleIndex + 1}</h3>
+            <button onclick="removeRule(${ruleIndex})" class="text-red-500 font-bold">Remove Rule</button>
+        </div>
+        <div class="conditions-container"></div>
+        <button onclick="addCondition(${ruleIndex})" class="mt-2 text-sm bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold py-1 px-3 rounded-lg">+ Add Condition</button>
+        <div class="action-block">
+            <span class="font-semibold">THEN SET</span>
+            <select class="p-2 border rounded-md bg-white" onchange="updateRuleAction(${ruleIndex}, 'setColumn', this.value)">${customColOptions}</select>
+            <input type="text" placeholder="To This Value" value="${ruleData.action.setValue}" class="p-2 border rounded-md" oninput="updateRuleAction(${ruleIndex}, 'setValue', this.value);">
+        </div>
+    `;
+    el.rulesContainer.appendChild(ruleBlock);
+    renderConditions(ruleIndex);
+}
+
+function renderConditions(ruleIndex) {
+    const project = appState.projects[appState.activeProjectName];
+    const rule = project.rules[ruleIndex];
+    const container = document.querySelector(`#rule-${ruleIndex} .conditions-container`);
+    container.innerHTML = '';
+    rule.conditions.forEach((cond, condIndex) => {
+        const allAvailableHeaders = [...new Set([...appState.builderHeaders, ...project.customColumns])];
+        const headerOptions = allAvailableHeaders.map(h => `<option value="${h}" ${cond.column === h ? 'selected' : ''}>${h}</option>`).join('');
+        const conditionBlock = document.createElement('div');
+        conditionBlock.className = 'condition-block';
+        conditionBlock.innerHTML = `
+            <span class="font-semibold">${condIndex === 0 ? 'IF' : 'AND'}</span>
+            <select class="p-2 border rounded-md bg-white" onchange="updateCondition(${ruleIndex}, ${condIndex}, 'column', this.value)">${headerOptions}</select>
+            <select class="p-2 border rounded-md bg-white" onchange="updateCondition(${ruleIndex}, ${condIndex}, 'operator', this.value)">
+                <option value="contains" ${cond.operator === 'contains' ? 'selected' : ''}>Contains</option>
+                <option value="not_contains" ${cond.operator === 'not_contains' ? 'selected' : ''}>Does Not Contain</option>
+                <option value="equals" ${cond.operator === 'equals' ? 'selected' : ''}>Equals</option>
+                <option value="gt" ${cond.operator === 'gt' ? 'selected' : ''}>Greater Than</option>
+                <option value="lt" ${cond.operator === 'lt' ? 'selected' : ''}>Less Than</option>
+                <option value="is_blank" ${cond.operator === 'is_blank' ? 'selected' : ''}>Is Blank</option>
+                <option value="in_list" ${cond.operator === 'in_list' ? 'selected' : ''}>Is In Data List</option>
+                <option value="between_date" ${cond.operator === 'between_date' ? 'selected' : ''}>Is Between (Date)</option>
+                <option value="between_number" ${cond.operator === 'between_number' ? 'selected' : ''}>Is Between (Number)</option>
+            </select>
+            <div class="value-container w-full"></div>
+            <button onclick="removeCondition(${ruleIndex}, ${condIndex})" class="text-red-500 hover:text-red-700 p-1">&times;</button>
+        `;
+        container.appendChild(conditionBlock);
+        const valueContainer = conditionBlock.querySelector('.value-container');
+        if (cond.operator === 'in_list') {
+            const originalValues = new Set(appState.builderData.map(row => row[cond.column]));
+            project.rules.forEach(r => {
+                if (r.action.setColumn === cond.column && r.action.setValue) {
+                    originalValues.add(r.action.setValue);
+                }
+            });
+            const uniqueValues = [...originalValues].filter(Boolean).sort();
+            const selectedValues = Array.isArray(cond.value) ? cond.value : [];
+            const listId = `list-${ruleIndex}-${condIndex}`;
+            valueContainer.innerHTML = `
+                <div class="flex flex-col">
+                    <input type="text" placeholder="Search list..." onkeyup="filterList('${listId}', this.value)" class="w-full p-2 border rounded-md mb-1">
+                    <select multiple id="${listId}" class="w-full p-2 border rounded-md h-24" onchange="updateConditionList(${ruleIndex}, ${condIndex}, this)"></select>
+                </div>
+            `;
+            const selectEl = document.getElementById(listId);
+            selectEl.innerHTML = uniqueValues.map(v => `<option value="${v}" ${selectedValues.includes(String(v)) ? 'selected' : ''}>${v}</option>`).join('');
+        } else if (cond.operator === 'between_date') {
+            const val = Array.isArray(cond.value) && cond.value.length === 2 ? cond.value : ['', ''];
+            valueContainer.innerHTML = `
+                <div class="range-container">
+                    <input type="date" value="${val[0]}" onchange="updateConditionRange(${ruleIndex}, ${condIndex}, 0, this.value)" class="w-full p-2 border rounded-md">
+                    <input type="date" value="${val[1]}" onchange="updateConditionRange(${ruleIndex}, ${condIndex}, 1, this.value)" class="w-full p-2 border rounded-md">
+                </div>`;
+        } else if (cond.operator === 'between_number') {
+            const val = Array.isArray(cond.value) && cond.value.length === 2 ? cond.value : ['', ''];
+            valueContainer.innerHTML = `
+                <div class="range-container">
+                    <input type="number" placeholder="Min" value="${val[0]}" oninput="updateConditionRange(${ruleIndex}, ${condIndex}, 0, this.value)" class="w-full p-2 border rounded-md">
+                    <input type="number" placeholder="Max" value="${val[1]}" oninput="updateConditionRange(${ruleIndex}, ${condIndex}, 1, this.value)" class="w-full p-2 border rounded-md">
+                </div>`;
+        } else {
+            const val = Array.isArray(cond.value) ? '' : cond.value;
+            valueContainer.innerHTML = `<input type="text" placeholder="Value" value="${val}" class="w-full p-2 border rounded-md" oninput="updateCondition(${ruleIndex}, ${condIndex}, 'value', this.value)">`;
+        }
+    });
+}
+
+window.filterList = (listId, searchTerm) => {
+    const select = document.getElementById(listId);
+    const term = searchTerm.toLowerCase();
+    Array.from(select.options).forEach(option => {
+        option.style.display = option.text.toLowerCase().includes(term) ? '' : 'none';
+    });
+};
+window.updateConditionList = (rIdx, cIdx, selectElement) => {
+    markProjectAsDirty();
+    const selectedValues = Array.from(selectElement.selectedOptions).map(opt => opt.value);
+    appState.projects[appState.activeProjectName].rules[rIdx].conditions[cIdx].value = selectedValues;
+};
+window.updateConditionRange = (rIdx, cIdx, part, value) => {
+    markProjectAsDirty();
+    appState.projects[appState.activeProjectName].rules[rIdx].conditions[cIdx].value[part] = value;
+};
+window.updateRuleAction = (rIdx, key, value) => {
+    markProjectAsDirty();
+    appState.projects[appState.activeProjectName].rules[rIdx].action[key] = value;
+};
+window.addCondition = (rIdx) => {
+    markProjectAsDirty();
+    appState.projects[appState.activeProjectName].rules[rIdx].conditions.push({ column: appState.builderHeaders[0], operator: 'contains', value: '' });
+    renderConditions(rIdx);
+};
+window.removeCondition = (rIdx, cIdx) => {
+    if (appState.projects[appState.activeProjectName].rules[rIdx].conditions.length > 1) {
+        markProjectAsDirty();
+        appState.projects[appState.activeProjectName].rules[rIdx].conditions.splice(cIdx, 1);
+        renderConditions(rIdx);
+    }
+};
+window.removeRule = (rIdx) => {
+    markProjectAsDirty();
+    appState.projects[appState.activeProjectName].rules.splice(rIdx, 1);
+    updateBuilderUI();
+};
+
+// --- EXECUTOR LOGIC ---
+function formatExecutorData() {
+    if (appState.executorData.length === 0) return;
+    el.formatExecutorDataBtn.disabled = true;
+    el.executorFormatStatus.textContent = 'Formatting...';
+    setTimeout(() => {
+        appState.executorData = runInitialAutomation(appState.executorData);
+        appState.executorHeaders = Object.keys(appState.executorData[0] || {});
+        el.executorFormatStatus.textContent = 'Formatting Complete!';
+        selectProjectToExecute();
+    }, 50);
+}
+
+function selectProjectToExecute() {
+    const projectName = el.executorProjectSelect.value;
+    const project = appState.projects[projectName];
+    el.executorTransformationSection.classList.add('hidden');
+    el.executorProcessingSection.classList.add('hidden');
+    el.resultsContainer.classList.add('hidden');
+    el.runAgingBtn.disabled = true;
+    el.runFullBtn.disabled = true;
+
+    if (project && project.transformations && project.transformations.length > 0) {
+        appState.sessionExecutorTransforms = project.transformations.map(t => ({
+            config: JSON.parse(JSON.stringify(t)), // Deep copy
+            lookupData: null,
+            lookupHeaders: null
+        }));
+        el.executorTransformationSection.classList.remove('hidden');
+        renderExecutorTransformations();
+    } else {
+        appState.sessionExecutorTransforms = [];
+        if (appState.executorData.length > 0) {
+            el.executorProcessingSection.classList.remove('hidden');
+            el.runAgingBtn.disabled = false;
+            el.runFullBtn.disabled = false;
+        }
+    }
+}
+
+function renderExecutorTransformations() {
+    const mainHeaders = appState.executorHeaders;
+    const allFilesUploaded = appState.sessionExecutorTransforms.every(t => t.config.type === 'concatenate' || t.lookupData !== null);
+    el.runExecutorTransformsBtn.disabled = !allFilesUploaded;
+
+    el.executorTransformationsList.innerHTML = appState.sessionExecutorTransforms.map((t, index) => {
+        const p = t.config.params;
+        if (t.config.type === 'vlookup') {
+            const lookupHeaders = t.lookupHeaders || [];
+            let needsRemap = false;
+            const checkAndRenderSelect = (savedCol, availableHeaders, type) => {
+                if (availableHeaders.includes(savedCol)) {
+                    return `<span class="font-mono text-sm bg-gray-200 px-2 py-1 rounded">${savedCol}</span>`;
+                }
+                needsRemap = true;
+                const options = availableHeaders.map(h => `<option value="${h}" ${h === savedCol ? 'selected' : ''}>${h}</option>`).join('');
+                return `<select class="remap-select p-1 border rounded-md bg-white text-sm" onchange="updateExecutorTransformParam(${index}, '${type}', this.value)">
+                            <option value="">-- Select Column --</option>
+                            ${options}
+                        </select>`;
+            };
+            const primarySelect = checkAndRenderSelect(p.primaryCol, mainHeaders, 'primaryCol');
+            const matchSelect = t.lookupData ? checkAndRenderSelect(p.matchCol, lookupHeaders, 'matchCol') : '<i>Upload lookup file first</i>';
+            const returnSelect = t.lookupData ? checkAndRenderSelect(p.returnCol, lookupHeaders, 'returnCol') : '<i>Upload lookup file first</i>';
+            return `<div class="p-3 border rounded-lg ${needsRemap && t.lookupData ? 'border-amber-400 bg-amber-50' : 'bg-gray-50'}">
+                <p class="font-semibold text-sm mb-2">VLOOKUP: Add column "<b>${p.targetColumn}</b>"</p>
+                <div class="mb-2">
+                    <label class="block text-xs font-medium text-gray-600">Upload lookup file: <i>${p.lookupIdentifier}</i></label>
+                    <input type="file" onchange="handleFileSelect(event, 'executorLookup', ${index})" accept=".csv, .xlsx, .xls" class="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer">
+                    <span id="executor-lookup-status-${index}" class="text-xs font-medium text-gray-500 mt-1 block">
+                        ${t.lookupData ? `Loaded (${t.lookupData.length} rows)` : 'No file selected.'}
+                    </span>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
+                    <div><span class="font-medium">Main Column:</span> ${primarySelect}</div>
+                    <div><span class="font-medium">Lookup Match:</span> ${matchSelect}</div>
+                    <div><span class="font-medium">Lookup Return:</span> ${returnSelect}</div>
+                </div>
+                ${needsRemap && t.lookupData ? '<p class="text-amber-600 text-xs mt-2">One or more columns were not found. Please re-map them.</p>' : ''}
+            </div>`;
+        } else if (t.config.type === 'concatenate') {
+             return `<div class="p-3 border rounded-lg bg-gray-50">
+                <p class="font-semibold text-sm">CONCATENATE: Create column "<b>${p.targetColumn}</b>"</p>
+                <p class="text-xs text-gray-600">Joining: ${p.columns.join(', ')}</p>
+            </div>`;
+        }
+    }).join('');
+}
+
+window.updateExecutorTransformParam = (index, paramType, value) => {
+    appState.sessionExecutorTransforms[index].config.params[paramType] = value;
+};
+
+
+function runExecutorTransformations() {
+    el.runExecutorTransformsBtn.disabled = true;
+    el.executorTransformStatus.textContent = 'Applying transformations...';
+
+    setTimeout(() => {
+        let transformedData = JSON.parse(JSON.stringify(appState.executorData));
+        appState.sessionExecutorTransforms.forEach(t => {
+            if (t.config.type === 'vlookup' && t.lookupData) {
+                const params = t.config.params;
+                const lookupMap = new Map(t.lookupData.map(row => [String(row[params.matchCol]), row[params.returnCol]]));
+                transformedData = transformedData.map(row => {
+                    const lookupValue = String(row[params.primaryCol]);
+                    const foundValue = lookupMap.get(lookupValue);
+                    row[params.targetColumn] = foundValue !== undefined ? foundValue : (row[params.targetColumn] || '');
+                    return row;
+                });
+            } else if (t.config.type === 'concatenate') {
+                const params = t.config.params;
+                transformedData = transformedData.map(row => {
+                    const valuesToJoin = params.columns.map(col => row[col] || '');
+                    row[params.targetColumn] = valuesToJoin.join(params.separator);
+                    return row;
+                });
+            }
+        });
+        appState.executorData = transformedData;
+        appState.executorHeaders = Object.keys(transformedData[0] || {});
+        el.executorTransformStatus.textContent = 'Transformations applied!';
+        el.executorProcessingSection.classList.remove('hidden');
+        el.runAgingBtn.disabled = false;
+        el.runFullBtn.disabled = false;
+    }, 50);
+}
+
+// --- FINAL DATA PROCESSING & RESULTS ---
+function processData(applyFullRuleset) {
+    const selectedProjectName = el.executorProjectSelect.value;
+    const project = appState.projects[selectedProjectName];
+    if (appState.executorData.length === 0 || !project) {
+        alert("Please select a project and upload a data file first.");
+        return;
+    }
+    el.loader.classList.remove('hidden');
+    el.resultsContainer.classList.add('hidden');
+    setTimeout(() => {
+        let dataToProcess = appState.executorData;
+        project.customColumns.forEach(col => {
+            dataToProcess.forEach(row => {
+                if (!row.hasOwnProperty(col)) row[col] = '';
+            });
+        });
+        const dosCol = project.serviceDateColumn;
+        let agingData = dataToProcess.map(row => {
+            let ageDays = 'N/A', agingBucket = 'N/A';
+            if (row[dosCol]) {
+                const serviceDate = new Date(row[dosCol]);
+                 if (!isNaN(serviceDate)) {
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    const serviceDateUTC = new Date(serviceDate.getTime() + serviceDate.getTimezoneOffset() * 60000);
+                    serviceDateUTC.setHours(0, 0, 0, 0);
+                    const diffTime = today.getTime() - serviceDateUTC.getTime();
+                    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+                    ageDays = diffDays;
+                    if (ageDays <= 30) agingBucket = '0-30';
+                    else if (ageDays <= 60) agingBucket = '31-60';
+                    else if (ageDays <= 90) agingBucket = '61-90';
+                    else if (ageDays <= 120) agingBucket = '91-120';
+                    else if (ageDays <= 365) agingBucket = '121-365';
+                    else agingBucket = '365+';
+                }
+            }
+            return { ...row, 'AR Days': ageDays, 'AR Aging': agingBucket };
+        });
+        const originalHeaders = Object.keys(dataToProcess[0]);
+        const dosIndex = originalHeaders.indexOf(dosCol);
+        const finalHeaders = [...originalHeaders];
+        if (dosIndex > -1) {
+             finalHeaders.splice(dosIndex + 1, 0, 'AR Days', 'AR Aging');
+        } else {
+            finalHeaders.push('AR Days', 'AR Aging');
+        }
+       
+        project.customColumns.forEach(c => {
+            if (!finalHeaders.includes(c)) finalHeaders.push(c);
+        });
+        appState.processedData = agingData.map(row => {
+            const reorderedRow = {};
+            finalHeaders.forEach(h => reorderedRow[h] = row[h]);
+            return reorderedRow;
+        });
+        if (applyFullRuleset) {
+            appState.processedData.forEach(row => {
+                project.rules.forEach(rule => {
+                    if (!rule.action.setColumn) return;
+                    const allConditionsMet = rule.conditions.every(cond => {
+                        const cellValue = row[cond.column];
+                        switch (cond.operator) {
+                            case 'contains': return String(cellValue).toLowerCase().includes(String(cond.value).toLowerCase());
+                            case 'not_contains': return !String(cellValue).toLowerCase().includes(String(cond.value).toLowerCase());
+                            case 'equals': return String(cellValue).toLowerCase() === String(cond.value).toLowerCase();
+                            case 'gt': return parseFloat(cellValue) > parseFloat(cond.value);
+                            case 'lt': return parseFloat(cellValue) < parseFloat(cond.value);
+                            case 'is_blank': return cellValue === null || cellValue === undefined || String(cellValue).trim() === '';
+                            case 'in_list': return Array.isArray(cond.value) && cond.value.includes(String(cellValue));
+                            case 'between_date':
+                                if (!cond.value || cond.value.length < 2) return false;
+                                const cellDate = new Date(cellValue);
+                                const startDate = new Date(cond.value[0]);
+                                const endDate = new Date(cond.value[1]);
+                                return !isNaN(cellDate) && cellDate >= startDate && cellDate <= endDate;
+                            case 'between_number':
+                                if (!cond.value || cond.value.length < 2) return false;
+                                const cellNum = parseFloat(cellValue);
+                                const min = parseFloat(cond.value[0]);
+                                const max = parseFloat(cond.value[1]);
+                                return !isNaN(cellNum) && cellNum >= min && cellNum <= max;
+                            default: return false;
+                        }
+                    });
+                    if (allConditionsMet) row[rule.action.setColumn] = rule.action.setValue;
+                });
+            });
+        }
+        renderTable();
+        el.loader.classList.add('hidden');
+        el.resultsContainer.classList.remove('hidden');
+    }, 50);
+}
+
+function renderTable() {
+    if (appState.processedData.length === 0) return;
+    const headers = Object.keys(appState.processedData[0]);
+    const table = document.createElement('table');
+    table.className = 'min-w-full text-sm divide-y divide-gray-200';
+    const thead = document.createElement('thead');
+    thead.className = 'bg-gray-100';
+    const trHead = document.createElement('tr');
+    headers.forEach(h => {
+        const th = document.createElement('th');
+        th.className = 'px-4 py-2 text-left text-xs font-medium text-gray-600 uppercase tracking-wider sticky top-0 bg-gray-100';
+        th.textContent = h;
+        trHead.appendChild(th);
+    });
+    thead.appendChild(trHead);
+    table.appendChild(thead);
+    const tbody = document.createElement('tbody');
+    tbody.className = 'bg-white divide-y divide-gray-200';
+    appState.processedData.slice(0, 200).forEach(row => {
+        const tr = document.createElement('tr');
+        headers.forEach(h => {
+        const td = document.createElement('td');
+        td.className = 'px-4 py-2 whitespace-nowrap text-xs';
+        const v = row[h];
+        td.textContent = (v !== null && v !== undefined) ? String(v) : '';
+        tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    el.tableContainer.innerHTML = '';
+    el.tableContainer.appendChild(table);
+    if (appState.processedData.length > 200) {
+        const p = document.createElement('p');
+        p.className = 'p-4 text-center text-sm text-gray-600 bg-gray-50';
+        p.textContent = `Showing first 200 of ${appState.processedData.length} rows.`;
+        el.tableContainer.appendChild(p);
+    }
+}
+
+function downloadCSV() {
+    if (appState.processedData.length === 0) return;
+    const safe = appState.processedData.map(row => {
+        const out = {};
+        for (const k of Object.keys(row)) {
+        const v = row[k];
+        out[k] = (typeof v === 'string') ? sanitizeForCSV(v) : v;
+        }
+        return out;
+    });
+    const worksheet = XLSX.utils.json_to_sheet(safe);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Formatted Data");
+    XLSX.writeFile(workbook, `${el.executorProjectSelect.value || 'Formatted_Report'}.csv`);
+}
+function sanitizeForCSV(value) {
+  if (typeof value !== 'string') return value;
+  const trimmed = value.trimStart();
+  if (/^[=+\-@]/.test(trimmed)) return "'" + value;
+  return value;
+}
+</script>
+</body>
+</html>
