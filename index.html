@@ -25,6 +25,8 @@
         .remap-select { border-color: #f59e0b; }
         .transform-tab { background-color: #eef2ff; color: #4338ca; }
         .transform-tab.active { background-color: #4f46e5; color: white; }
+        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 1000; }
+        .modal-content { background-color: white; padding: 2rem; border-radius: 0.75rem; width: 90%; max-width: 600px; max-height: 80vh; overflow-y: auto; }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800">
@@ -58,8 +60,14 @@
                         <h2 class="text-xl font-semibold mb-4 text-gray-700">Upload & Format Sample File</h2>
                         <p class="text-sm text-gray-500 mb-2">Upload a file to begin configuration.</p>
                         <input type="file" id="builderFileUploader" accept=".csv, .xlsx, .xls" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer">
-                        <span id="builder-file-status" class="text-sm font-medium text-gray-500 mt-2 block">No file selected.</span>
-                        <button id="formatBuilderDataBtn" class="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-4 rounded-lg transition mt-3" disabled>Format Dates & Currency</button>
+                        <div class="flex justify-between items-center mt-2">
+                            <span id="builder-file-status" class="text-sm font-medium text-gray-500">No file selected.</span>
+                            <button id="builderRemoveFileBtn" class="hidden text-red-500 hover:text-red-700 text-sm font-semibold">Remove</button>
+                        </div>
+                        <div class="flex space-x-2 mt-3">
+                            <button id="editBuilderHeadersBtn" class="w-1/2 bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition" disabled>Edit Headers</button>
+                            <button id="formatBuilderDataBtn" class="w-1/2 bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-4 rounded-lg transition" disabled>Format Dates & Currency</button>
+                        </div>
                         <span id="builder-format-status" class="text-sm font-medium text-green-600 mt-2 block h-4 text-center"></span>
                     </div>
                 </div>
@@ -96,7 +104,10 @@
                                     <div>
                                         <label class="block text-sm font-medium text-gray-600">1. Upload/Select Lookup File</label>
                                         <input type="file" id="lookupFileUploader" accept=".csv, .xlsx, .xls" class="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer">
-                                        <span id="lookup-file-status" class="text-xs font-medium text-gray-500 mt-1 block"></span>
+                                        <div class="flex justify-between items-center mt-1">
+                                            <span id="lookup-file-status" class="text-xs font-medium text-gray-500"></span>
+                                            <button id="lookupRemoveFileBtn" class="hidden text-red-500 hover:text-red-700 text-xs font-semibold">Remove</button>
+                                        </div>
                                     </div>
                                     <div id="vlookup-controls" class="hidden space-y-2">
                                         <div>
@@ -193,8 +204,14 @@
                     <div class="bg-white p-5 rounded-xl shadow-sm border">
                         <h2 class="text-xl font-semibold mb-4 text-gray-700">2. Upload & Format Data File</h2>
                         <input type="file" id="executorFileUploader" accept=".csv, .xlsx, .xls" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer">
-                        <span id="executor-file-status" class="text-sm font-medium text-gray-500 mt-2 block">No file selected.</span>
-                        <button id="formatExecutorDataBtn" class="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-4 rounded-lg transition mt-3" disabled>Format Dates & Currency</button>
+                        <div class="flex justify-between items-center mt-2">
+                            <span id="executor-file-status" class="text-sm font-medium text-gray-500">No file selected.</span>
+                            <button id="executorRemoveFileBtn" class="hidden text-red-500 hover:text-red-700 text-sm font-semibold">Remove</button>
+                        </div>
+                        <div class="flex space-x-2 mt-3">
+                            <button id="editExecutorHeadersBtn" class="w-1/2 bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition" disabled>Edit Headers</button>
+                            <button id="formatExecutorDataBtn" class="w-1/2 bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-4 rounded-lg transition" disabled>Format Dates & Currency</button>
+                        </div>
                         <span id="executor-format-status" class="text-sm font-medium text-green-600 mt-2 block h-4 text-center"></span>
                     </div>
                     <div id="executor-transformation-section" class="bg-white p-5 rounded-xl shadow-sm border hidden">
@@ -225,7 +242,68 @@
         </div>
     </div>
 
-<script>
+    <!-- Edit Headers Modal -->
+    <div id="edit-headers-modal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <h2 class="text-2xl font-bold mb-4">Edit Column Headers</h2>
+            <div id="header-editor-content" class="space-y-2"></div>
+            <div class="mt-6 flex justify-end space-x-3">
+                <button id="cancel-header-edit" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg">Cancel</button>
+                <button id="save-header-edit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Save Changes</button>
+            </div>
+        </div>
+    </div>
+    
+    <script type="module">
+        // Firebase Imports
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+        import { getFirestore, collection, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+        // --- FIREBASE SETUP ---
+        // These variables are placeholders and will be injected by the environment.
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        let db;
+        let projectsCollectionRef;
+
+        async function initializeFirebase() {
+            // Do not proceed if firebase config is not provided
+            if (Object.keys(firebaseConfig).length === 0) {
+                console.log("Firebase config not available. Running in local mode.");
+                return;
+            }
+            try {
+                const app = initializeApp(firebaseConfig);
+                const auth = getAuth(app);
+                db = getFirestore(app);
+                
+                projectsCollectionRef = collection(db, `/artifacts/${appId}/public/data/projects`);
+
+                // Use onAuthStateChanged to ensure auth is complete before listening to Firestore
+                let listenerAttached = false;
+                onAuthStateChanged(auth, (user) => {
+                    if (user && !listenerAttached) {
+                        console.log("User authenticated. Attaching Firestore listener.");
+                        listenerAttached = true;
+                        listenForProjects();
+                    }
+                });
+
+                // Now, trigger the sign-in
+                if (initialAuthToken) {
+                    await signInWithCustomToken(auth, initialAuthToken);
+                } else {
+                    await signInAnonymously(auth);
+                }
+
+            } catch (error) {
+                console.error("Firebase initialization failed:", error);
+            }
+        }
+
 // --- STATE MANAGEMENT ---
 let appState = {
     projects: {},
@@ -239,7 +317,8 @@ let appState = {
     executorData: [],
     executorHeaders: [],
     sessionExecutorTransforms: [],
-    processedData: []
+    processedData: [],
+    editingHeadersMode: null // 'builder' or 'executor'
 };
 
 // --- DOM ELEMENTS ---
@@ -253,6 +332,8 @@ const el = {
     builderProjectSelect: document.getElementById('builderProjectSelect'),
     builderFileUploader: document.getElementById('builderFileUploader'),
     builderFileStatus: document.getElementById('builder-file-status'),
+    builderRemoveFileBtn: document.getElementById('builderRemoveFileBtn'),
+    editBuilderHeadersBtn: document.getElementById('editBuilderHeadersBtn'),
     formatBuilderDataBtn: document.getElementById('formatBuilderDataBtn'),
     builderFormatStatus: document.getElementById('builder-format-status'),
     builderConfigPanel: document.getElementById('builder-config-panel'),
@@ -268,6 +349,7 @@ const el = {
     concatTabBtn: document.getElementById('concat-tab-btn'),
     lookupFileUploader: document.getElementById('lookupFileUploader'),
     lookupFileStatus: document.getElementById('lookup-file-status'),
+    lookupRemoveFileBtn: document.getElementById('lookupRemoveFileBtn'),
     vlookupControls: document.getElementById('vlookup-controls'),
     vlookupPrimaryCol: document.getElementById('vlookup-primary-col'),
     vlookupLookupMatchCol: document.getElementById('vlookup-lookup-match-col'),
@@ -294,6 +376,8 @@ const el = {
     executorProjectSelect: document.getElementById('executorProjectSelect'),
     executorFileUploader: document.getElementById('executorFileUploader'),
     executorFileStatus: document.getElementById('executor-file-status'),
+    executorRemoveFileBtn: document.getElementById('executorRemoveFileBtn'),
+    editExecutorHeadersBtn: document.getElementById('editExecutorHeadersBtn'),
     formatExecutorDataBtn: document.getElementById('formatExecutorDataBtn'),
     executorFormatStatus: document.getElementById('executor-format-status'),
     executorTransformationSection: document.getElementById('executor-transformation-section'),
@@ -306,15 +390,22 @@ const el = {
     loader: document.getElementById('loader'),
     resultsContainer: document.getElementById('results-container'),
     tableContainer: document.getElementById('table-container'),
-    downloadCsv: document.getElementById('download-csv')
+    downloadCsv: document.getElementById('download-csv'),
+    editHeadersModal: document.getElementById('edit-headers-modal'),
+    headerEditorContent: document.getElementById('header-editor-content'),
+    cancelHeaderEdit: document.getElementById('cancel-header-edit'),
+    saveHeaderEdit: document.getElementById('save-header-edit')
 };
 
 // --- INITIALIZATION ---
 document.addEventListener('DOMContentLoaded', initialize);
 
-function initialize() {
-    loadProjectsFromStorage();
-    updateProjectDropdowns();
+async function initialize() {
+    await initializeFirebase();
+    // Fallback to localStorage if Firebase isn't initialized
+    if (!db) { 
+        loadProjectsFromStorage();
+    }
     setupEventListeners();
 }
 
@@ -322,8 +413,11 @@ function setupEventListeners() {
     el.createProjectBtn.addEventListener('click', createNewProject);
     el.builderProjectSelect.addEventListener('change', selectProjectToEdit);
     el.builderFileUploader.addEventListener('change', (e) => handleFileSelect(e, 'builder'));
+    el.builderRemoveFileBtn.addEventListener('click', () => removeFile('builder'));
+    el.editBuilderHeadersBtn.addEventListener('click', () => openHeaderEditor('builder'));
     el.formatBuilderDataBtn.addEventListener('click', formatBuilderData);
     el.lookupFileUploader.addEventListener('change', (e) => handleFileSelect(e, 'lookup'));
+    el.lookupRemoveFileBtn.addEventListener('click', () => removeFile('lookup'));
     el.addVlookupBtn.addEventListener('click', addVlookupTransformation);
     el.addConcatBtn.addEventListener('click', addConcatTransformation);
     el.prepareDataBtn.addEventListener('click', prepareBuilderData);
@@ -357,11 +451,17 @@ function setupEventListeners() {
     // Executor Listeners
     el.executorProjectSelect.addEventListener('change', selectProjectToExecute);
     el.executorFileUploader.addEventListener('change', (e) => handleFileSelect(e, 'executor'));
+    el.executorRemoveFileBtn.addEventListener('click', () => removeFile('executor'));
+    el.editExecutorHeadersBtn.addEventListener('click', () => openHeaderEditor('executor'));
     el.formatExecutorDataBtn.addEventListener('click', formatExecutorData);
     el.runExecutorTransformsBtn.addEventListener('click', runExecutorTransformations);
     el.runAgingBtn.addEventListener('click', () => processData(false));
     el.runFullBtn.addEventListener('click', () => processData(true));
     el.downloadCsv.addEventListener('click', downloadCSV);
+
+    // Modal Listeners
+    el.cancelHeaderEdit.addEventListener('click', closeHeaderEditor);
+    el.saveHeaderEdit.addEventListener('click', saveHeaderChanges);
 }
 
 // --- DIRTY STATE MANAGEMENT ---
@@ -466,30 +566,59 @@ function updateBuilderUI() {
 }
 
 // --- PROJECT MANAGEMENT ---
-function loadProjectsFromStorage() {
+function loadProjectsFromStorage() { // LOCALSTORAGE FALLBACK
     const stored = localStorage.getItem('rcmProjects');
     if (stored) {
         appState.projects = JSON.parse(stored);
-    }
-}
-
-function saveProjectsToStorage() {
-    localStorage.setItem('rcmProjects', JSON.stringify(appState.projects));
-}
-
-function createNewProject() {
-    const name = el.newProjectName.value.trim();
-    if (name && !appState.projects[name]) {
-        appState.projects[name] = { serviceDateColumn: '', customColumns: [], rules: [], transformations: [] };
-        appState.activeProjectName = name;
-        el.newProjectName.value = '';
         updateProjectDropdowns();
-        el.builderProjectSelect.value = name;
-        markProjectAsDirty();
-        updateBuilderUI();
-    } else if (appState.projects[name]) {
-        alert("A project with this name already exists.");
     }
+}
+
+function listenForProjects() { // FIREBASE REAL-TIME LISTENER
+    onSnapshot(projectsCollectionRef, (snapshot) => {
+        const projects = {};
+        snapshot.forEach((doc) => {
+            projects[doc.id] = doc.data();
+        });
+        appState.projects = projects;
+        updateProjectDropdowns();
+    }, (error) => {
+        console.error("Error listening to projects:", error);
+    });
+}
+
+async function createNewProject() {
+    const name = el.newProjectName.value.trim();
+    if (!name) return;
+    if (appState.projects[name]) {
+        // Overwriting without confirmation as confirm() is not supported in the environment.
+        console.log(`Project "${name}" already exists. It will be overwritten.`);
+    }
+
+    const newProjectData = { serviceDateColumn: '', customColumns: [], rules: [], transformations: [] };
+    
+    // Use Firebase if available, otherwise use localStorage
+    if (db) {
+        try {
+            const projectDocRef = doc(projectsCollectionRef, name);
+            await setDoc(projectDocRef, newProjectData);
+            // The onSnapshot listener will handle the UI update automatically
+        } catch (error) {
+            console.error("Error creating project in Firestore:", error);
+            alert("Could not create project in the cloud.");
+            return;
+        }
+    } else { 
+        appState.projects[name] = newProjectData;
+        localStorage.setItem('rcmProjects', JSON.stringify(appState.projects));
+        updateProjectDropdowns();
+    }
+    
+    appState.activeProjectName = name;
+    el.newProjectName.value = '';
+    el.builderProjectSelect.value = name;
+    markProjectAsDirty();
+    updateBuilderUI();
 }
 
 function selectProjectToEdit() {
@@ -505,18 +634,35 @@ function selectProjectToEdit() {
     updateBuilderUI();
 }
 
-function saveCurrentProject() {
+async function saveCurrentProject() {
     if (!appState.activeProjectName) return;
-    const project = appState.projects[appState.activeProjectName];
-    project.serviceDateColumn = el.serviceDateColumn.value;
+    
+    const projectName = appState.activeProjectName;
+    const projectData = appState.projects[projectName];
+    projectData.serviceDateColumn = el.serviceDateColumn.value;
     
     const transformationsToSave = JSON.parse(JSON.stringify(appState.transformations));
     transformationsToSave.forEach(t => {
+        // Remove temporary builder data before saving
         if (t._builderLookupData) delete t._builderLookupData;
     });
-    project.transformations = transformationsToSave;
+    projectData.transformations = transformationsToSave;
 
-    saveProjectsToStorage();
+    // Use Firebase if available, otherwise use localStorage
+    if (db) {
+        try {
+            const projectDocRef = doc(projectsCollectionRef, projectName);
+            await setDoc(projectDocRef, projectData);
+            // onSnapshot will update the local state, so no manual update is needed.
+        } catch (error) {
+            console.error("Error saving project to Firestore:", error);
+            alert("Could not save project to the cloud.");
+            return;
+        }
+    } else { 
+        localStorage.setItem('rcmProjects', JSON.stringify(appState.projects));
+    }
+    
     markProjectAsClean(true);
 }
 
@@ -525,12 +671,23 @@ function handleFileSelect(event, mode, index) {
     const file = event.target.files[0];
     if (!file) return;
 
-    let statusEl;
+    let statusEl, removeBtn;
     switch(mode) {
-        case 'builder': statusEl = el.builderFileStatus; break;
-        case 'lookup': statusEl = el.lookupFileStatus; break;
-        case 'executor': statusEl = el.executorFileStatus; break;
-        case 'executorLookup': statusEl = document.getElementById(`executor-lookup-status-${index}`); break;
+        case 'builder': 
+            statusEl = el.builderFileStatus; 
+            removeBtn = el.builderRemoveFileBtn;
+            break;
+        case 'lookup': 
+            statusEl = el.lookupFileStatus; 
+            removeBtn = el.lookupRemoveFileBtn;
+            break;
+        case 'executor': 
+            statusEl = el.executorFileStatus; 
+            removeBtn = el.executorRemoveFileBtn;
+            break;
+        case 'executorLookup': 
+            statusEl = document.getElementById(`executor-lookup-status-${index}`); 
+            break; 
         default: return;
     }
 
@@ -545,29 +702,30 @@ function handleFileSelect(event, mode, index) {
             if (jsonData.length === 0) throw new Error("File is empty.");
             const headers = Object.keys(jsonData[0] || {});
             
+            statusEl.textContent = `Loaded: ${file.name} (${jsonData.length} rows)`;
+            if(removeBtn) removeBtn.classList.remove('hidden');
+
             if (mode === 'builder') {
                 appState.builderData = jsonData;
                 appState.builderHeaders = headers;
                 appState.builderDataIsPrepared = false;
-                appState.transformations = []; // Clear transformations for new file
+                appState.transformations = [];
+                el.editBuilderHeadersBtn.disabled = false;
                 el.formatBuilderDataBtn.disabled = false;
                 el.builderFormatStatus.textContent = '';
-                statusEl.textContent = `Loaded: ${file.name} (${jsonData.length} rows)`;
                 updateBuilderUI();
             } else if (mode === 'lookup') {
                 appState.currentLookup = { data: jsonData, headers: headers, fileName: file.name };
-                statusEl.textContent = `Using: ${file.name} (${jsonData.length} rows)`;
                 updateVlookupControls();
             } else if (mode === 'executor') {
                 appState.executorData = jsonData;
                 appState.executorHeaders = headers;
+                el.editExecutorHeadersBtn.disabled = false;
                 el.formatExecutorDataBtn.disabled = false;
                 el.executorFormatStatus.textContent = '';
-                statusEl.textContent = `Loaded: ${file.name} (${jsonData.length} rows)`;
             } else if (mode === 'executorLookup') {
                 appState.sessionExecutorTransforms[index].lookupData = jsonData;
                 appState.sessionExecutorTransforms[index].lookupHeaders = headers;
-                statusEl.textContent = `Loaded: ${file.name} (${jsonData.length} rows)`;
                 renderExecutorTransformations();
             }
         } catch (err) {
@@ -577,6 +735,38 @@ function handleFileSelect(event, mode, index) {
     };
     reader.readAsArrayBuffer(file);
 }
+
+function removeFile(mode) {
+    if (mode === 'builder') {
+        appState.builderData = [];
+        appState.builderHeaders = [];
+        appState.builderDataIsPrepared = false;
+        el.builderFileUploader.value = '';
+        el.builderFileStatus.textContent = 'No file selected.';
+        el.builderRemoveFileBtn.classList.add('hidden');
+        el.editBuilderHeadersBtn.disabled = true;
+        el.formatBuilderDataBtn.disabled = true;
+        el.builderFormatStatus.textContent = '';
+        el.builderConfigPanel.classList.add('hidden');
+    } else if (mode === 'lookup') {
+        appState.currentLookup = { data: [], headers: [], fileName: '' };
+        el.lookupFileUploader.value = '';
+        el.lookupFileStatus.textContent = '';
+        el.lookupRemoveFileBtn.classList.add('hidden');
+        updateVlookupControls();
+    } else if (mode === 'executor') {
+        appState.executorData = [];
+        appState.executorHeaders = [];
+        el.executorFileUploader.value = '';
+        el.executorFileStatus.textContent = 'No file selected.';
+        el.executorRemoveFileBtn.classList.add('hidden');
+        el.editExecutorHeadersBtn.disabled = true;
+        el.formatExecutorDataBtn.disabled = true;
+        el.executorFormatStatus.textContent = '';
+        selectProjectToExecute(); // Reset executor UI
+    }
+}
+
 
 // --- BUILDER: TRANSFORMATION LOGIC ---
 function updateVlookupControls() {
@@ -745,7 +935,7 @@ function renderTransformationsList() {
     }).join('');
 }
 
-window.moveTransformation = (index, direction) => {
+function moveTransformation(index, direction) {
     if (direction === 'up' && index > 0) {
         [appState.transformations[index], appState.transformations[index - 1]] = [appState.transformations[index - 1], appState.transformations[index]];
     } else if (direction === 'down' && index < appState.transformations.length - 1) {
@@ -762,7 +952,7 @@ window.moveTransformation = (index, direction) => {
 };
 
 
-window.removeTransformation = (index) => {
+function removeTransformation(index) {
     appState.transformations.splice(index, 1);
     if (appState.builderDataIsPrepared) {
         appState.builderDataIsPrepared = false;
@@ -809,7 +999,7 @@ function excelSerialToDate(serial) {
 }
 
 function runInitialAutomation(data) {
-    const keywords = { date: ['date', 'dos'], currency: ['amount', 'value', 'balance', 'charge', 'payment', 'adj'] };
+    const keywords = { date: ['date', 'dos', 'dt'], currency: ['amount', 'value', 'balance', 'charge', 'payment', 'adj'] };
     let processed = JSON.parse(JSON.stringify(data));
     if (processed.length === 0) return [];
     const headers = Object.keys(processed[0]);
@@ -817,7 +1007,7 @@ function runInitialAutomation(data) {
         headers.forEach(header => {
             const lowerHeader = header.toLowerCase();
             const cellValue = row[header];
-            if (keywords.date.some(k => lowerHeader.includes(k))) {
+            if (keywords.date.some(k => ` ${lowerHeader} `.includes(` ${k} `))) {
                 let d = null;
                 if (typeof cellValue === 'number' && cellValue > 1) {
                     d = excelSerialToDate(cellValue);
@@ -902,14 +1092,14 @@ function addCustomColumn() {
     }
 }
 
-window.removeCustomColumn = (index) => {
+function removeCustomColumn(index) {
     if (!appState.activeProjectName) return;
     appState.projects[appState.activeProjectName].customColumns.splice(index, 1);
     markProjectAsDirty();
     updateBuilderUI();
 };
 
-window.updateCondition = (rIdx, cIdx, key, value) => {
+function updateCondition(rIdx, cIdx, key, value) {
     markProjectAsDirty();
     const project = appState.projects[appState.activeProjectName];
     if (!project) return;
@@ -1024,39 +1214,39 @@ function renderConditions(ruleIndex) {
     });
 }
 
-window.filterList = (listId, searchTerm) => {
+function filterList(listId, searchTerm) {
     const select = document.getElementById(listId);
     const term = searchTerm.toLowerCase();
     Array.from(select.options).forEach(option => {
         option.style.display = option.text.toLowerCase().includes(term) ? '' : 'none';
     });
 };
-window.updateConditionList = (rIdx, cIdx, selectElement) => {
+function updateConditionList(rIdx, cIdx, selectElement) {
     markProjectAsDirty();
     const selectedValues = Array.from(selectElement.selectedOptions).map(opt => opt.value);
     appState.projects[appState.activeProjectName].rules[rIdx].conditions[cIdx].value = selectedValues;
 };
-window.updateConditionRange = (rIdx, cIdx, part, value) => {
+function updateConditionRange(rIdx, cIdx, part, value) {
     markProjectAsDirty();
     appState.projects[appState.activeProjectName].rules[rIdx].conditions[cIdx].value[part] = value;
 };
-window.updateRuleAction = (rIdx, key, value) => {
+function updateRuleAction(rIdx, key, value) {
     markProjectAsDirty();
     appState.projects[appState.activeProjectName].rules[rIdx].action[key] = value;
 };
-window.addCondition = (rIdx) => {
+function addCondition(rIdx) {
     markProjectAsDirty();
     appState.projects[appState.activeProjectName].rules[rIdx].conditions.push({ column: appState.builderHeaders[0], operator: 'contains', value: '' });
     renderConditions(rIdx);
 };
-window.removeCondition = (rIdx, cIdx) => {
+function removeCondition(rIdx, cIdx) {
     if (appState.projects[appState.activeProjectName].rules[rIdx].conditions.length > 1) {
         markProjectAsDirty();
         appState.projects[appState.activeProjectName].rules[rIdx].conditions.splice(cIdx, 1);
         renderConditions(rIdx);
     }
 };
-window.removeRule = (rIdx) => {
+function removeRule(rIdx) {
     markProjectAsDirty();
     appState.projects[appState.activeProjectName].rules.splice(rIdx, 1);
     updateBuilderUI();
@@ -1151,7 +1341,7 @@ function renderExecutorTransformations() {
     }).join('');
 }
 
-window.updateExecutorTransformParam = (index, paramType, value) => {
+function updateExecutorTransformParam(index, paramType, value) {
     appState.sessionExecutorTransforms[index].config.params[paramType] = value;
 };
 
@@ -1347,6 +1537,74 @@ function sanitizeForCSV(value) {
   if (/^[=+\-@]/.test(trimmed)) return "'" + value;
   return value;
 }
-</script>
+
+// --- HEADER EDITOR MODAL ---
+function openHeaderEditor(mode) {
+    appState.editingHeadersMode = mode;
+    const headers = mode === 'builder' ? appState.builderHeaders : appState.executorHeaders;
+    el.headerEditorContent.innerHTML = headers.map((h, i) => `
+        <div class="grid grid-cols-2 gap-2 items-center">
+            <span class="font-mono text-sm p-2 bg-gray-100 rounded-md truncate">${h}</span>
+            <input type="text" value="${h}" data-original-header="${h}" class="p-2 border rounded-md">
+        </div>
+    `).join('');
+    el.editHeadersModal.classList.remove('hidden');
+}
+
+function closeHeaderEditor() {
+    el.editHeadersModal.classList.add('hidden');
+    appState.editingHeadersMode = null;
+}
+
+function saveHeaderChanges() {
+    const mode = appState.editingHeadersMode;
+    const dataProp = mode === 'builder' ? 'builderData' : 'executorData';
+    const headersProp = mode === 'builder' ? 'builderHeaders' : 'executorHeaders';
+    
+    const newHeaders = Array.from(el.headerEditorContent.querySelectorAll('input')).map(input => ({
+        original: input.dataset.originalHeader,
+        updated: input.value.trim()
+    }));
+
+    const updatedData = appState[dataProp].map(row => {
+        const newRow = {};
+        newHeaders.forEach(h => {
+            if (h.updated) {
+                newRow[h.updated] = row[h.original];
+            }
+        });
+        return newRow;
+    });
+
+    appState[dataProp] = updatedData;
+    appState[headersProp] = newHeaders.map(h => h.updated).filter(Boolean);
+
+    if (mode === 'builder') {
+        updateBuilderUI();
+    } else {
+        selectProjectToExecute();
+    }
+
+    closeHeaderEditor();
+}
+
+    // --- Expose functions to global scope for inline event handlers ---
+    window.switchTab = switchTab;
+    window.switchTransformTab = switchTransformTab;
+    window.removeCustomColumn = removeCustomColumn;
+    window.updateCondition = updateCondition;
+    window.addCondition = addCondition;
+    window.removeCondition = removeCondition;
+    window.updateRuleAction = updateRuleAction;
+    window.removeRule = removeRule;
+    window.filterList = filterList;
+    window.updateConditionList = updateConditionList;
+    window.updateConditionRange = updateConditionRange;
+    window.moveTransformation = moveTransformation;
+    window.removeTransformation = removeTransformation;
+    window.handleFileSelect = handleFileSelect;
+    window.updateExecutorTransformParam = updateExecutorTransformParam;
+
+    </script>
 </body>
 </html>
